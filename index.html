@@ -2,27 +2,32 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>GALAGA: VOID WAR Pro</title>
+<title>GALAGA: VOID WAR Ultimate</title>
 <style>
 body {margin:0; background:black; overflow:hidden; font-family:Arial,sans-serif; color:white;}
 canvas {display:block; margin:auto; background:#000;}
 #overlay {
   position:absolute; inset:0; display:flex; flex-direction:column; justify-content:center; align-items:center;
-  background: radial-gradient(circle, #111 0%, #000 100%);
-  color:white; font-size:20px;
+  background:black; color:white; font-size:20px; overflow:hidden;
 }
-button {padding:12px 28px; margin:8px; font-size:18px; cursor:pointer; border:none; border-radius:6px; font-weight:bold; transition: transform 0.2s;}
-button:hover {transform: scale(1.1);}
+button {
+  padding:12px 28px; margin:8px; font-size:18px; cursor:pointer; border:none; border-radius:6px; font-weight:bold;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+button:hover {transform: scale(1.1); box-shadow: 0 0 10px white;}
 #easy {background:green; color:black;}
 #medium {background:yellow; color:black;}
 #hard {background:red; color:white;}
 #hud {position:absolute; top:10px; left:10px; font-size:16px;}
+#instructions {font-size:16px; margin-top:10px; text-align:center;}
 </style>
 </head>
 <body>
 <div id="overlay">
   <h1 id="title" style="font-size:48px;">GALAGA: VOID WAR</h1>
-  <p>Use WASD to move, SPACE to shoot, P to pause.</p>
+  <div id="instructions">
+    <p>WASD: Move | SPACE: Shoot | P: Pause</p>
+  </div>
   <div>
     <button id="easy" onclick="startGame(1)">Easy</button>
     <button id="medium" onclick="startGame(2)">Medium</button>
@@ -34,7 +39,7 @@ button:hover {transform: scale(1.1);}
 <canvas id="game" width="600" height="800"></canvas>
 
 <script>
-const c=document.getElementById("game"), x=c.getContext("2d");
+const canvas=document.getElementById("game"), ctx=canvas.getContext("2d");
 let keys={}, stars=[], player, enemies=[], pBullets=[], eBullets=[], powerUps=[], fx=[];
 let score=0, level=1, diff=1, run=false, paused=false, shake=0, lives=3;
 let hi = localStorage.hiScore||0;
@@ -46,33 +51,30 @@ const titleElem=document.getElementById("title");
 
 // Starfield background
 for(let i=0;i<200;i++) stars.push({x:Math.random()*600, y:Math.random()*800, s:1+Math.random()*2});
-function drawStars(){
-  x.fillStyle="white";
-  stars.forEach(s=>{x.fillRect(s.x,s.y,2,2); s.y+=s.s; if(s.y>800){s.y=0; s.x=Math.random()*600;}});
-}
+function drawStars(){ctx.fillStyle="white"; stars.forEach(s=>{ctx.fillRect(s.x,s.y,2,2); s.y+=s.s; if(s.y>800){s.y=0; s.x=Math.random()*600;}});}
 
 // Audio beep
-const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+const audioCtx = new (window.AudioContext||window.webkitAudioContext)();
 function beep(freq,len){const o=audioCtx.createOscillator(),g=audioCtx.createGain(); o.connect(g); g.connect(audioCtx.destination); o.frequency.value=freq; o.start(); g.gain.setValueAtTime(.1,audioCtx.currentTime); g.gain.exponentialRampToValueAtTime(.001,audioCtx.currentTime+len); o.stop(audioCtx.currentTime+len);}
 
 // Key handling
 addEventListener("keydown", e=>keys[e.key.toLowerCase()]=1);
 addEventListener("keyup", e=>keys[e.key.toLowerCase()]=0);
 
-// Spawn player
+// Player spawn
 function spawnPlayer(){player={x:280,y:700,w:40,h:50,spd:6,cd:0,shots:1,shield:0};}
 
-// Enemy wave formation
+// Enemy wave
 function spawnWave(){
   enemies=[]; eBullets=[];
   let cols=5, rows=1+Math.min(level,3);
   for(let r=0;r<rows;r++){
     for(let c=0;c<cols;c++){
-      let hp = Math.random()<0.2?2:1; // elite 20%
-      enemies.push({x:100+c*80, y:60+r*50, w:40, h:30, hp:hp, dx:(r%2?1:-1)*(1+diff*0.5), cd:0, dive:false, targetY:null});
+      let hp = Math.random()<0.2?2:1;
+      enemies.push({x:100+c*80, y:60+r*50, w:40, h:30, hp:hp, dx:(r%2?1:-1)*(1+diff*0.5), cd:0, dive:false, targetY:null, diveAngle:0});
     }
   }
-  if(level%5===0) enemies.push({x:200,y:40,w:200,h:60,hp:15,boss:1,dx:2*diff,cd:0,dive:false,targetY:null});
+  if(level%5===0) enemies.push({x:200,y:40,w:200,h:60,hp:15,boss:1,dx:2*diff,cd:0,dive:false,targetY:null,diveAngle:0});
 }
 
 // Start game
@@ -85,10 +87,10 @@ function startGame(d){
   loop();
 }
 
-// Update loop
+// Update
 function update(){
   if(!run) return;
-  // Pulsing title when overlay visible
+
   if(document.getElementById("overlay").style.display!="none"){
     titlePulse+=pulseDir;
     if(titlePulse>1.1||titlePulse<0.9) pulseDir*=-1;
@@ -101,8 +103,8 @@ function update(){
   // Player movement
   if(keys.a && player.x>0) player.x -= player.spd;
   if(keys.d && player.x+player.w<600) player.x += player.spd;
-  if(keys.w && player.y>500) player.y -= player.spd; // top limit
-  if(keys.s && player.y+player.h<780) player.y += player.spd; // bottom limit
+  if(keys.w && player.y>400) player.y -= player.spd;
+  if(keys.s && player.y+player.h<780) player.y += player.spd;
 
   // Shooting
   if(keys[" "] && player.cd<=0){
@@ -115,19 +117,23 @@ function update(){
   pBullets.forEach(b=>b.y-=12);
   eBullets.forEach(b=>b.y+=5);
 
-  // Enemy movement
+  // Enemy movement & dives
   enemies.forEach(e=>{
     if(!e.dive) e.x += e.dx;
-    if(e.x<0 || e.x+e.w>600) e.dx*=-1;
+    if(e.x<0||e.x+e.w>600) e.dx*=-1;
 
-    // Dive attack chance
+    // Dive initiation
     if(Math.random()<(0.01*diff) && !e.dive){ 
-      e.dive=true; 
-      e.targetY = 600 + Math.random()*100; 
+      e.dive=true; e.targetY=600+Math.random()*100; e.diveAngle=Math.random()*Math.PI/2-0.25;
     }
 
-    if(e.dive) e.y += 2; // simple dive
-    if(e.dive && e.y>e.targetY) e.dive=false;
+    // Dive motion (curved)
+    if(e.dive){
+      e.x += Math.sin(e.diveAngle)*3; 
+      e.y += Math.cos(e.diveAngle)*3;
+      e.diveAngle += 0.02;
+      if(e.y>800) e.dive=false; // remove dive when off-screen
+    }
 
     if(Math.random()<(0.005*diff) && e.cd<=0){ eBullets.push({x:e.x+e.w/2, y:e.y}); e.cd=60; }
     if(e.cd>0) e.cd--;
@@ -171,7 +177,8 @@ function update(){
 
   fx.forEach(f=>f.r+=2);
 
-  if(enemies.length===0){level++; spawnWave();}
+  // Level up if enemies gone or below screen
+  if(enemies.length===0 || enemies.every(e=>e.y>800)){level++; spawnWave();}
 
   document.getElementById("hud").innerText =
     `Score:${score} Level:${level} Lives:${lives} Shield:${player.shield} ${paused?"PAUSED":""}`;
@@ -179,36 +186,38 @@ function update(){
 
 // Draw
 function draw(){
-  x.save();
-  if(shake) x.translate(Math.random()*shake-shake/2, Math.random()*shake-shake/2);
-  x.clearRect(0,0,600,800);
+  ctx.save();
+  if(shake) ctx.translate(Math.random()*shake-shake/2, Math.random()*shake-shake/2);
+  ctx.clearRect(0,0,600,800);
   drawStars();
 
-  // Player ship (better model)
-  x.fillStyle="cyan"; x.beginPath();
-  x.moveTo(player.x+20,player.y); // nose
-  x.lineTo(player.x,player.y+50); // left wing
-  x.lineTo(player.x+10,player.y+40); 
-  x.lineTo(player.x+30,player.y+40); 
-  x.lineTo(player.x+40,player.y+50); // right wing
-  x.fill();
-  x.fillStyle="white"; x.fillRect(player.x+18,player.y+10,4,10); // cockpit
+  // Player ship
+  ctx.fillStyle="cyan"; ctx.beginPath();
+  ctx.moveTo(player.x+20,player.y);
+  ctx.lineTo(player.x,player.y+50);
+  ctx.lineTo(player.x+10,player.y+40);
+  ctx.lineTo(player.x+30,player.y+40);
+  ctx.lineTo(player.x+40,player.y+50);
+  ctx.fill();
+  ctx.fillStyle="white"; ctx.fillRect(player.x+18,player.y+10,4,10);
 
   // Bullets
-  x.fillStyle="yellow"; pBullets.forEach(b=>x.fillRect(b.x,b.y,4,10));
-  x.fillStyle="red"; eBullets.forEach(b=>x.fillRect(b.x,b.y,4,10));
+  ctx.fillStyle="yellow"; pBullets.forEach(b=>ctx.fillRect(b.x,b.y,4,10));
+  ctx.fillStyle="red"; eBullets.forEach(b=>ctx.fillRect(b.x,b.y,4,10));
 
   // Enemies
   enemies.forEach(e=>{
-    x.fillStyle=e.boss?"darkred":e.hp==2?"orange":"purple";
-    x.fillRect(e.x,e.y,e.w,e.h);
-    if(e.boss){ x.fillStyle="white"; x.fillRect(e.x+e.w/2-5,e.y+10,10,10);}
+    ctx.fillStyle=e.boss?"darkred":e.hp==2?"orange":"purple";
+    ctx.fillRect(e.x,e.y,e.w,e.h);
+    if(e.boss){ctx.fillStyle="white"; ctx.fillRect(e.x+e.w/2-5,e.y+10,10,10);}
   });
 
-  fx.forEach(f=>{x.strokeStyle="orange";x.beginPath();x.arc(f.x,f.y,f.r,0,Math.PI*2);x.stroke();});
-  powerUps.forEach(p=>{x.fillStyle=p.t=="triple"?"lime":"cyan"; x.fillRect(p.x,p.y,20,20);});
+  // Explosions
+  fx.forEach(f=>{ctx.strokeStyle="orange";ctx.beginPath();ctx.arc(f.x,f.y,f.r,0,Math.PI*2);ctx.stroke();});
+  // Power-ups
+  powerUps.forEach(p=>{ctx.fillStyle=p.t=="triple"?"lime":"cyan"; ctx.fillRect(p.x,p.y,20,20);});
 
-  x.restore();
+  ctx.restore();
   if(shake>0) shake--;
 }
 
