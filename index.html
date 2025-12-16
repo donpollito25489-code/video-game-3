@@ -2,213 +2,252 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Galaga Rocket Game</title>
+<title>Galaga Space Battle</title>
+
 <style>
-  body { margin: 0; background: black; overflow: hidden; font-family: sans-serif; color: white; }
-  canvas { display: block; margin: auto; background: black; }
-  #score { position: absolute; top: 10px; left: 10px; font-size: 24px; }
-  #menu { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); display: flex; flex-direction: column; justify-content: center; align-items: center; color: white; font-size: 24px; }
-  .menu-btn { padding: 10px 20px; margin: 10px; background: white; color: black; cursor: pointer; font-size: 20px; border-radius: 10px; }
+body {
+  margin: 0;
+  background: black;
+  overflow: hidden;
+  font-family: Arial, sans-serif;
+  color: white;
+}
+
+canvas {
+  display: block;
+  margin: auto;
+}
+
+#menu {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.9);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+
+button {
+  padding: 12px 30px;
+  margin: 10px;
+  font-size: 18px;
+  cursor: pointer;
+}
+
+#score {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  font-size: 20px;
+}
 </style>
 </head>
+
 <body>
-<div id="score">Score: 0 | Level: 1</div>
+
 <div id="menu">
-  <div>GALAGA-STYLE GAME</div>
-  <div style="margin-top:20px;">Select Difficulty:</div>
-  <div class="menu-btn" onclick="startGame('easy')">Easy</div>
-  <div class="menu-btn" onclick="startGame('medium')">Medium</div>
-  <div class="menu-btn" onclick="startGame('hard')">Hard</div>
+  <h1>GALAGA: SPACE WAR</h1>
+  <button onclick="startGame(1)">Easy</button>
+  <button onclick="startGame(2)">Medium</button>
+  <button onclick="startGame(3)">Hard</button>
 </div>
-<canvas id="gameCanvas" width="600" height="800"></canvas>
+
+<div id="score"></div>
+<canvas id="game" width="600" height="800"></canvas>
+
 <script>
-const canvas = document.getElementById("gameCanvas");
+/* ================= SETUP ================= */
+const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 
-// Key input
 let keys = {};
-document.addEventListener("keydown", (e) => keys[e.key.toLowerCase()] = true);
-document.addEventListener("keyup", (e) => keys[e.key.toLowerCase()] = false);
+addEventListener("keydown", e => keys[e.key.toLowerCase()] = true);
+addEventListener("keyup", e => keys[e.key.toLowerCase()] = false);
 
-// Load player image
-const playerImg = new Image();
-playerImg.src = "/mnt/data/077ec56b-0492-4711-9cd6-f0907a2b59ad.png";
+/* ================= SPACE BACKGROUND ================= */
+let stars = Array.from({ length: 150 }, () => ({
+  x: Math.random() * canvas.width,
+  y: Math.random() * canvas.height,
+  r: Math.random() * 2,
+  s: Math.random() * 1 + 0.5
+}));
 
-// Game variables
-let player, enemies, enemyBullets, obstacles, level, score, enemyRows, difficulty, gameRunning=false;
+function drawStars() {
+  ctx.fillStyle = "white";
+  stars.forEach(star => {
+    ctx.beginPath();
+    ctx.arc(star.x, star.y, star.r, 0, Math.PI * 2);
+    ctx.fill();
+    star.y += star.s;
+    if (star.y > canvas.height) {
+      star.y = 0;
+      star.x = Math.random() * canvas.width;
+    }
+  });
+}
 
-// Initialize player
-function initPlayer(){
+/* ================= PLAYER ================= */
+const shipImg = new Image();
+let shipLoaded = false;
+shipImg.src = "ship.png";
+shipImg.onload = () => shipLoaded = true;
+
+let player;
+
+/* ================= GAME STATE ================= */
+let enemies = [];
+let enemyBullets = [];
+let difficulty = 1;
+let score = 0;
+let level = 1;
+let running = false;
+
+/* ================= START GAME ================= */
+function startGame(diff) {
+  difficulty = diff;
+  score = 0;
+  level = 1;
+  document.getElementById("menu").style.display = "none";
+
   player = {
-    x: canvas.width/2 - 32,
-    y: canvas.height - 80,
-    width: 64,
-    height: 64,
+    x: canvas.width / 2 - 30,
+    y: canvas.height - 100,
+    w: 60,
+    h: 60,
     speed: 6,
     bullets: [],
-    shootCooldown: 0,
-    shield: 0
+    cooldown: 0
   };
+
+  spawnEnemies();
+  running = true;
+  loop();
 }
 
-// Create enemies
-function createEnemies(){
+/* ================= ENEMIES ================= */
+function spawnEnemies() {
   enemies = [];
-  for(let r=0;r<enemyRows;r++){
-    for(let c=0;c<6;c++){
-      enemies.push({
-        x: 60 + c*80,
-        y: 60 + r*60,
-        width: 40,
-        height: 40,
-        color: "red",
-        dx: 1 + 0.2*level + (difficulty==='medium'?0.5:difficulty==='hard'?1:0),
-        bullets: [],
-        shootChance: 0.005 + 0.002*level + (difficulty==='medium'?0.002:difficulty==='hard'?0.004:0)
-      });
-    }
-  }
-}
+  enemyBullets = [];
 
-// Create obstacles (alien battle ships)
-function createObstacles(){
-  obstacles = [];
-  for(let i=0;i<3;i++){
-    obstacles.push({
-      x: Math.random()*(canvas.width-60),
-      y: -Math.random()*600,
-      width: 60,
-      height: 30,
-      dy: 2 + level*0.2
+  for (let i = 0; i < 5 + level; i++) {
+    enemies.push({
+      x: Math.random() * (canvas.width - 50),
+      y: Math.random() * 200,
+      w: 50,
+      h: 30,
+      dx: (Math.random() < 0.5 ? -1 : 1) * (1 + difficulty),
+      shootChance: 0.005 * difficulty
     });
   }
 }
 
-// Shooting
-function shoot(){
-  if(player.shootCooldown <= 0){
-    player.bullets.push({x: player.x + player.width/2 - 3, y: player.y, width: 6, height: 12, color: "yellow", dy: -10});
-    player.shootCooldown = 15;
+/* ================= UPDATE ================= */
+function update() {
+  if (!running) return;
+
+  // Player movement
+  if (keys.a && player.x > 0) player.x -= player.speed;
+  if (keys.d && player.x + player.w < canvas.width) player.x += player.speed;
+  if (keys.w && player.y > 0) player.y -= player.speed;
+  if (keys.s && player.y + player.h < canvas.height) player.y += player.speed;
+
+  // Shooting
+  if (keys[" "] && player.cooldown <= 0) {
+    player.bullets.push({ x: player.x + player.w / 2 - 2, y: player.y, dy: -8 });
+    player.cooldown = 15;
   }
-}
+  if (player.cooldown > 0) player.cooldown--;
 
-// Start game with difficulty
-function startGame(selectedDifficulty){
-  difficulty = selectedDifficulty;
-  document.getElementById("menu").style.display="none";
-  gameRunning = true;
-  level=1;
-  score=0;
-  enemyRows=3;
-  initPlayer();
-  createEnemies();
-  createObstacles();
-  enemyBullets = [];
-  loop();
-}
+  player.bullets.forEach(b => b.y += b.dy);
+  player.bullets = player.bullets.filter(b => b.y > -20);
 
-// Update game
-function update(){
-  if(!gameRunning) return;
-
-  // Player movement WASD
-  if(keys['a'] && player.x>0) player.x -= player.speed;
-  if(keys['d'] && player.x + player.width < canvas.width) player.x += player.speed;
-  if(keys['w'] && player.y>0) player.y -= player.speed;
-  if(keys['s'] && player.y + player.height < canvas.height) player.y += player.speed;
-  if(keys[' ']) shoot();
-  if(player.shootCooldown>0) player.shootCooldown--;
-
-  // Move bullets
-  player.bullets.forEach((b,i)=>{b.y+=b.dy; if(b.y<0) player.bullets.splice(i,1);});
-
-  // Move enemies
-  let reverse=false;
-  enemies.forEach(e=>{
+  // Enemies
+  enemies.forEach(e => {
     e.x += e.dx;
-    if(e.x + e.width > canvas.width || e.x < 0) reverse = true;
-
-    // Enemy shooting
-    if(Math.random()<e.shootChance){
-      enemyBullets.push({x:e.x+e.width/2-3,y:e.y+e.height,width:6,height:12,color:"orange",dy:5});
+    if (e.x < 0 || e.x + e.w > canvas.width) e.dx *= -1;
+    if (Math.random() < e.shootChance) {
+      enemyBullets.push({ x: e.x + e.w / 2, y: e.y + e.h, dy: 4 + difficulty });
     }
   });
-  if(reverse) enemies.forEach(e=>{e.dx*=-1;e.y+=20;});
 
-  // Move enemy bullets
-  enemyBullets.forEach((b,i)=>{b.y+=b.dy;if(b.y>canvas.height) enemyBullets.splice(i,1);});
+  enemyBullets.forEach(b => b.y += b.dy);
 
-  // Move obstacles
-  obstacles.forEach(o=>{
-    o.y += o.dy;
-    if(o.y>canvas.height) o.y=-Math.random()*600; // loop back
-  });
-
-  // Collisions: player bullets vs enemies
-  player.bullets.forEach((b,bi)=>{
-    enemies.forEach((e,ei)=>{
-      if(b.x<e.x+e.width && b.x+b.width>e.x && b.y<e.y+e.height && b.y+b.height>e.y){
-        player.bullets.splice(bi,1);
-        enemies.splice(ei,1);
+  // Bullet collisions
+  player.bullets.forEach((b, bi) => {
+    enemies.forEach((e, ei) => {
+      if (
+        b.x > e.x && b.x < e.x + e.w &&
+        b.y > e.y && b.y < e.y + e.h
+      ) {
+        enemies.splice(ei, 1);
+        player.bullets.splice(bi, 1);
         score += 10;
       }
     });
   });
 
-  // Collisions: player bullets vs obstacles
-  player.bullets.forEach((b,bi)=>{
-    obstacles.forEach((o,oi)=>{
-      if(b.x<o.x+o.width && b.x+b.width>o.x && b.y<o.y+o.height && b.y+b.height>o.y){
-        player.bullets.splice(bi,1);
-        obstacles.splice(oi,1);
-        score += 5;
-      }
-    });
-  });
-
-  // Collisions: enemy bullets vs player
-  enemyBullets.forEach((b,i)=>{
-    if(b.x<player.x+player.width && b.x+b.width>player.x && b.y<player.y+player.height && b.y+b.height>player.y){
-      if(player.shield && player.shield>0){player.shield--; enemyBullets.splice(i,1);}
-      else {alert("Game Over! Score: "+score); gameRunning=false; document.getElementById("menu").style.display="flex";}
+  enemyBullets.forEach(b => {
+    if (
+      b.x > player.x && b.x < player.x + player.w &&
+      b.y > player.y && b.y < player.y + player.h
+    ) {
+      gameOver();
     }
   });
 
-  // Level up
-  if(enemies.length===0){
+  if (enemies.length === 0) {
     level++;
-    enemyRows = Math.min(5, enemyRows+1);
-    createEnemies();
-    createObstacles();
+    spawnEnemies();
   }
 
-  document.getElementById("score").innerText=`Score: ${score} | Level: ${level}`;
+  document.getElementById("score").innerText =
+    `Score: ${score} | Level: ${level}`;
 }
 
-// Draw game
-function draw(){
-  if(!gameRunning) return;
-
-  ctx.clearRect(0,0,canvas.width,canvas.height);
+/* ================= DRAW ================= */
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  drawStars();
 
   // Player
-  ctx.drawImage(playerImg, player.x, player.y, player.width, player.height);
+  if (shipLoaded) {
+    ctx.drawImage(shipImg, player.x, player.y, player.w, player.h);
+  } else {
+    ctx.fillStyle = "cyan";
+    ctx.beginPath();
+    ctx.moveTo(player.x + player.w / 2, player.y);
+    ctx.lineTo(player.x, player.y + player.h);
+    ctx.lineTo(player.x + player.w, player.y + player.h);
+    ctx.fill();
+  }
 
   // Player bullets
-  player.bullets.forEach(b=>{ctx.fillStyle=b.color;ctx.fillRect(b.x,b.y,b.width,b.height);});
+  ctx.fillStyle = "yellow";
+  player.bullets.forEach(b => ctx.fillRect(b.x, b.y, 4, 10));
 
-  // Enemies
-  enemies.forEach(e=>{ctx.fillStyle=e.color;ctx.fillRect(e.x,e.y,e.width,e.height);});
+  // Alien ships
+  ctx.fillStyle = "purple";
+  enemies.forEach(e => ctx.fillRect(e.x, e.y, e.w, e.h));
 
   // Enemy bullets
-  enemyBullets.forEach(b=>{ctx.fillStyle=b.color;ctx.fillRect(b.x,b.y,b.width,b.height);});
-
-  // Obstacles
-  obstacles.forEach(o=>{ctx.fillStyle="purple"; ctx.fillRect(o.x,o.y,o.width,o.height);});
+  ctx.fillStyle = "red";
+  enemyBullets.forEach(b => ctx.fillRect(b.x, b.y, 4, 10));
 }
 
-// Main loop
-function loop(){update(); draw(); if(gameRunning) requestAnimationFrame(loop);}
+/* ================= LOOP ================= */
+function loop() {
+  update();
+  draw();
+  if (running) requestAnimationFrame(loop);
+}
+
+/* ================= GAME OVER ================= */
+function gameOver() {
+  running = false;
+  document.getElementById("menu").style.display = "flex";
+}
 </script>
+
 </body>
 </html>
