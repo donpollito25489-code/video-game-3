@@ -58,7 +58,7 @@ function spawnWave(){
   const cols=5, rows=1+Math.min(level,3);
   for(let r=0;r<rows;r++){
     for(let c=0;c<cols;c++){
-      let hp = Math.random()<0.2?2:1; // 20% chance elite enemy
+      let hp = Math.random()<0.2?2:1; // elite enemy 20%
       enemies.push({x:100+c*80,y:60+r*50,w:40,h:30,hp:hp,dx:(r%2?1:-1)*(1+diff*.5),cd:0});
     }
   }
@@ -79,22 +79,21 @@ function startGame(d){
 /* ===== UPDATE ===== */
 function update(){
 if(!run||paused)return;
-
 if(keys.p){paused=true;setTimeout(()=>keys.p=0,200);}
 
-// Player horizontal only (classic Galaga)
+// Player horizontal movement only
 if(keys.a&&player.x>0)player.x-=player.spd;
 if(keys.d&&player.x+player.w<600)player.x+=player.spd;
 
-// Player shooting
+// Player shooting (realistic arcade rate ~0.3 sec)
 if(keys[" "]&&player.cd<=0){
   for(let i=0;i<player.shots;i++) pBullets.push({x:player.x+20+i*8-4,y:player.y});
-  player.cd=60; beep(700,.05); // 1 sec cooldown
+  player.cd=18; beep(700,.05);
 }
 if(player.cd>0)player.cd--;
 
 // Move bullets
-pBullets.forEach(b=>b.y-=8);
+pBullets.forEach(b=>b.y-=12); // faster bullet speed
 eBullets.forEach(b=>b.y+=5);
 
 // Enemy movement & shooting
@@ -102,8 +101,8 @@ enemies.forEach(e=>{
   e.x+=e.dx;
   if(e.x<0||e.x+e.w>600)e.dx*=-1;
   e.cd>0?e.cd--:0;
-  // Dive attack: 1% chance
-  if(Math.random()<0.01*diff) eBullets.push({x:e.x+e.w/2,y:e.y}), e.cd=60;
+  // Dive attack chance
+  if(Math.random()<0.01*diff && e.cd<=0) { eBullets.push({x:e.x+e.w/2,y:e.y}); e.cd=60; }
 });
 
 // Collisions
@@ -171,7 +170,10 @@ x.fillStyle="yellow"; pBullets.forEach(b=>x.fillRect(b.x,b.y,4,10));
 x.fillStyle="red"; eBullets.forEach(b=>x.fillRect(b.x,b.y,4,10));
 
 // Enemies
-enemies.forEach(e=>{x.fillStyle=e.boss?"darkred":e.hp==2?"orange":"purple"; x.fillRect(e.x,e.y,e.w,e.h);});
+enemies.forEach(e=>{
+  x.fillStyle=e.boss?"darkred":e.hp==2?"orange":"purple";
+  x.fillRect(e.x,e.y,e.w,e.h);
+});
 
 // Explosions
 fx.forEach(f=>{x.strokeStyle="orange";x.beginPath();x.arc(f.x,f.y,f.r,0,Math.PI*2);x.stroke();});
