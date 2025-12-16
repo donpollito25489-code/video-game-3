@@ -31,75 +31,51 @@ button{padding:12px 28px;margin:8px;font-size:18px;cursor:pointer}
 <canvas id="game" width="600" height="800"></canvas>
 
 <script>
-/* ================= CORE ================= */
-const c = document.getElementById("game");
-const x = c.getContext("2d");
-let keys = {};
-addEventListener("keydown",e=>keys[e.key.toLowerCase()]=1);
-addEventListener("keyup",e=>keys[e.key.toLowerCase()]=0);
-
-/* ================= AUDIO ================= */
-const audioCtx = new (window.AudioContext||window.webkitAudioContext)();
-function beep(freq,len){
-  const o=audioCtx.createOscillator(),g=audioCtx.createGain();
-  o.connect(g);g.connect(audioCtx.destination);
-  o.frequency.value=freq;o.start();
-  g.gain.setValueAtTime(.1,audioCtx.currentTime);
-  g.gain.exponentialRampToValueAtTime(.001,audioCtx.currentTime+len);
-  o.stop(audioCtx.currentTime+len);
-}
-
-/* ================= STATE ================= */
-let stars=[],player,enemies=[],pBullets=[],eBullets=[],powerUps=[],fx=[];
+const c=document.getElementById("game");
+const x=c.getContext("2d");
+let keys={},stars=[],player,enemies=[],pBullets=[],eBullets=[],powerUps=[],fx=[];
 let score=0,level=1,diff=1,run=false,paused=false,shake=0;
 let hi=localStorage.hiScore||0;
 document.getElementById("hi").innerText="High Score: "+hi;
 
-/* ================= BACKGROUND ================= */
-for(let i=0;i<200;i++)
-stars.push({x:Math.random()*600,y:Math.random()*800,s:1+Math.random()*2});
-function drawStars(){
-  x.fillStyle="white";
-  stars.forEach(s=>{
-    x.fillRect(s.x,s.y,2,2);
-    s.y+=s.s;
-    if(s.y>800){s.y=0;s.x=Math.random()*600;}
-  });
-}
+addEventListener("keydown",e=>keys[e.key.toLowerCase()]=1);
+addEventListener("keyup",e=>keys[e.key.toLowerCase()]=0);
 
-/* ================= PLAYER ================= */
-function spawnPlayer(){
-  player={x:280,y:700,w:40,h:50,spd:6,cd:0,shots:1,shield:0};
-}
+/* ===== AUDIO ===== */
+const audioCtx = new (window.AudioContext||window.webkitAudioContext)();
+function beep(freq,len){const o=audioCtx.createOscillator(),g=audioCtx.createGain();o.connect(g);g.connect(audioCtx.destination);o.frequency.value=freq;o.start();g.gain.setValueAtTime(.1,audioCtx.currentTime);g.gain.exponentialRampToValueAtTime(.001,audioCtx.currentTime+len);o.stop(audioCtx.currentTime+len);}
 
-/* ================= WAVES ================= */
+/* ===== BACKGROUND ===== */
+for(let i=0;i<200;i++)stars.push({x:Math.random()*600,y:Math.random()*800,s:1+Math.random()*2});
+function drawStars(){x.fillStyle="white";stars.forEach(s=>{x.fillRect(s.x,s.y,2,2);s.y+=s.s;if(s.y>800){s.y=0;s.x=Math.random()*600;}});}
+
+/* ===== PLAYER ===== */
+function spawnPlayer(){player={x:280,y:700,w:40,h:50,spd:6,cd:0,shots:1,shield:0};}
+
+/* ===== WAVES ===== */
 function spawnWave(){
-  enemies=[]; eBullets=[];
-  const cols=8, rows=2+Math.min(level,4);
-  for(let r=0;r<rows;r++){
-    for(let c=0;c<cols;c++){
-      enemies.push({
-        x:60+c*60,y:60+r*50,
-        w:40,h:30,hp:1,
-        dx:(r%2?1:-1)*(1+diff*.5)
-      });
-    }
+enemies=[]; eBullets=[];
+const cols=5, rows=1+Math.min(level,3);
+for(let r=0;r<rows;r++){
+  for(let c=0;c<cols;c++){
+    enemies.push({x:100+c*80,y:60+r*50,w:40,h:30,hp:1,dx:(r%2?1:-1)*(1+diff*.5),cd:0});
   }
-  if(level%5===0)
-    enemies.push({x:200,y:40,w:200,h:60,hp:20,boss:1,dx:2*diff});
+}
+if(level%5===0)
+  enemies.push({x:200,y:40,w:200,h:60,hp:20,boss:1,dx:2*diff,cd:0});
 }
 
-/* ================= GAME START ================= */
+/* ===== GAME START ===== */
 function startGame(d){
-  diff=d; score=0; level=1;
-  spawnPlayer(); spawnWave();
-  pBullets=[]; powerUps=[]; fx=[];
-  paused=false; run=true;
-  document.getElementById("overlay").style.display="none";
-  loop();
+diff=d; score=0; level=1;
+spawnPlayer(); spawnWave();
+pBullets=[]; powerUps=[]; fx=[]; eBullets=[];
+paused=false; run=true;
+document.getElementById("overlay").style.display="none";
+loop();
 }
 
-/* ================= UPDATE ================= */
+/* ===== UPDATE ===== */
 function update(){
 if(!run||paused)return;
 
@@ -110,98 +86,104 @@ if(keys.d&&player.x+player.w<600)player.x+=player.spd;
 if(keys.w&&player.y>0)player.y-=player.spd;
 if(keys.s&&player.y+player.h<800)player.y+=player.spd;
 
+/* ===== PLAYER SHOOT ===== */
 if(keys[" "]&&player.cd<=0){
-  for(let i=0;i<player.shots;i++)
-    pBullets.push({x:player.x+20+i*8-4,y:player.y});
-  player.cd=15; beep(700,.05);
+  for(let i=0;i<player.shots;i++) pBullets.push({x:player.x+20+i*8-4,y:player.y});
+  player.cd=60; beep(700,.05); // 1 sec cooldown
 }
 if(player.cd>0)player.cd--;
 
+/* ===== BULLETS ===== */
 pBullets.forEach(b=>b.y-=8);
 eBullets.forEach(b=>b.y+=5);
 
+/* ===== ENEMIES ===== */
 enemies.forEach(e=>{
   e.x+=e.dx;
   if(e.x<0||e.x+e.w>600)e.dx*=-1;
-  if(Math.random()<.01*diff)
-    eBullets.push({x:e.x+e.w/2,y:e.y+e.h});
+  if(e.cd>0)e.cd--;
+  if(e.cd<=0 && Math.random()<0.1*diff){ // slower shooting
+    eBullets.push({x:e.x+e.w/2,y:e.y+e.h}); e.cd=60;
+  }
 });
 
+/* ===== COLLISIONS ===== */
 pBullets.forEach((b,bi)=>{
   enemies.forEach((e,ei)=>{
     if(b.x>e.x&&b.x<e.x+e.w&&b.y>e.y&&b.y<e.y+e.h){
       e.hp--; pBullets.splice(bi,1); shake=6;
-      if(e.hp<=0){
-        enemies.splice(ei,1); score+=e.boss?200:10;
-        fx.push({x:e.x+e.w/2,y:e.y+e.h/2,r:5});
-        beep(200,.1);
-      }
+      if(e.hp<=0){enemies.splice(ei,1); score+=e.boss?200:10; fx.push({x:e.x+e.w/2,y:e.y+e.h/2,r:5}); beep(200,.1);
+      if(Math.random()<.3)powerUps.push({x:e.x,y:e.y,t:Math.random()<.5?"triple":"shield"});}
     }
   });
 });
 
-eBullets.forEach(b=>{
-  if(b.x>player.x&&b.x<player.x+player.w&&b.y>player.y&&b.y<player.y+player.h){
-    if(player.shield>0)player.shield--;
-    else gameOver();
-  }
+eBullets.forEach((b,i)=>{
+if(b.x>player.x&&b.x<player.x+player.w&&b.y>player.y&&b.y<player.y+player.h){
+  if(player.shield>0)player.shield--;
+  else gameOver();
+}
 });
 
+/* ===== POWER-UPS ===== */
+powerUps.forEach(p=>p.y+=2);
+powerUps.forEach((p,i)=>{
+if(p.x>player.x&&p.x<player.x+player.w&&p.y>player.y&&p.y<player.y+player.h){
+  if(p.t=="triple")player.shots=3;
+  if(p.t=="shield")player.shield=5;
+  powerUps.splice(i,1);
+}
+});
+
+/* ===== EXPLOSIONS ===== */
 fx.forEach(f=>f.r+=2);
+
+/* ===== LEVEL UP ===== */
 if(enemies.length===0){level++;spawnWave();}
+
 document.getElementById("hud").innerText=
 `Score:${score} Level:${level} Shield:${player.shield} ${paused?"PAUSED":""}`;
 }
 
-/* ================= DRAW ================= */
+/* ===== DRAW ===== */
 function draw(){
 x.save();
 if(shake)x.translate(Math.random()*shake-shake/2,Math.random()*shake-shake/2);
 x.clearRect(0,0,600,800);
 drawStars();
 
-/* ship */
-x.fillStyle="cyan";
-x.beginPath();
+/* player ship */
+x.fillStyle="cyan"; x.beginPath();
 x.moveTo(player.x+20,player.y);
 x.lineTo(player.x,player.y+50);
-x.lineTo(player.x+40,player.y+50);
-x.fill();
+x.lineTo(player.x+40,player.y+50); x.fill();
 
 /* bullets */
-x.fillStyle="yellow";
-pBullets.forEach(b=>x.fillRect(b.x,b.y,4,10));
-x.fillStyle="red";
-eBullets.forEach(b=>x.fillRect(b.x,b.y,4,10));
+x.fillStyle="yellow"; pBullets.forEach(b=>x.fillRect(b.x,b.y,4,10));
+x.fillStyle="red"; eBullets.forEach(b=>x.fillRect(b.x,b.y,4,10));
 
 /* enemies */
-enemies.forEach(e=>{
-  x.fillStyle=e.boss?"darkred":"purple";
-  x.fillRect(e.x,e.y,e.w,e.h);
-});
+enemies.forEach(e=>{x.fillStyle=e.boss?"darkred":"purple";x.fillRect(e.x,e.y,e.w,e.h);});
 
 /* explosions */
-fx.forEach(f=>{
-  x.strokeStyle="orange";
-  x.beginPath();x.arc(f.x,f.y,f.r,0,Math.PI*2);x.stroke();
-});
+fx.forEach(f=>{x.strokeStyle="orange";x.beginPath();x.arc(f.x,f.y,f.r,0,Math.PI*2);x.stroke();});
+
+/* power-ups */
+powerUps.forEach(p=>{x.fillStyle=p.t=="triple"?"lime":"cyan";x.fillRect(p.x,p.y,20,20);});
 
 x.restore();
 if(shake>0)shake--;
 }
 
-/* ================= LOOP ================= */
-function loop(){
-  update(); draw();
-  if(run) requestAnimationFrame(loop);
-}
+/* ===== LOOP ===== */
+function loop(){update(); draw(); if(run) requestAnimationFrame(loop);}
 
-/* ================= GAME OVER ================= */
+/* ===== GAME OVER ===== */
 function gameOver(){
-  run=false;
-  if(score>hi){hi=score;localStorage.hiScore=hi;}
-  document.getElementById("hi").innerText="High Score: "+hi;
-  document.getElementById("overlay").style.display="flex";
+run=false;
+if(score>hi){hi=score;localStorage.hiScore=hi;}
+document.getElementById("hi").innerText="High Score: "+hi;
+document.getElementById("overlay").style.display="flex";
 }
 </script>
 </body>
