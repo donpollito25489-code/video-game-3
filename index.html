@@ -68,14 +68,12 @@ document.getElementById("coinDisplay").innerText="Coins: "+coins;
 
 /* Ships for shop */
 const ships=[
-  {id:'basic',name:'Basic Fighter',price:0,unlocked:true,draw:(x,y,w,h)=>{ctx.fillStyle="cyan";ctx.beginPath();ctx.moveTo(x+w/2,y);ctx.lineTo(x,y+h);ctx.lineTo(x+w,y+h);ctx.fill();ctx.fillStyle="white";ctx.fillRect(x+w/2-2,y+8,4,10);}},
-  {id:'winged',name:'Winged Raider',price:50,unlocked:false,draw:(x,y,w,h)=>{ctx.fillStyle="deepskyblue";ctx.beginPath();ctx.moveTo(x+w/2,y);ctx.lineTo(x+4,y+h);ctx.lineTo(x+(w/2-8),y+h-8);ctx.lineTo(x+(w/2+8),y+h-8);ctx.lineTo(x+w-4,y+h);ctx.fill();ctx.fillStyle="white";ctx.fillRect(x+w/2-3,y+10,6,12);}},
-  {id:'sleek',name:'Sleek Avenger',price:120,unlocked:false,draw:(x,y,w,h)=>{ctx.fillStyle="lightblue";ctx.beginPath();ctx.moveTo(x+w/2,y);ctx.lineTo(x+4,y+h);ctx.lineTo(x+w/2-6,y+h-6);ctx.lineTo(x+w/2+6,y+h-6);ctx.lineTo(x+w-4,y+h);ctx.fill();ctx.fillStyle="white";ctx.fillRect(x+w/2-4,y+8,8,14);}},
-  {id:'phantom',name:'Phantom Wing',price:250,unlocked:false,draw:(x,y,w,h)=>{ctx.fillStyle="#98fb98";ctx.beginPath();ctx.moveTo(x+w/2,y);ctx.lineTo(x+w*0.2,y+h);ctx.lineTo(x+w*0.4,y+h*0.8);ctx.lineTo(x+w*0.6,y+h*0.8);ctx.lineTo(x+w*0.8,y+h);ctx.fill();ctx.fillStyle="white";ctx.fillRect(x+w/2-5,y+12,10,12);}}
+  {id:'basic',name:'Basic Fighter',price:0,unlocked:true,draw:(ctx,x,y,w,h)=>{ctx.fillStyle="cyan";ctx.beginPath();ctx.moveTo(x+w/2,y);ctx.lineTo(x,y+h);ctx.lineTo(x+w,y+h);ctx.fill();ctx.fillStyle="white";ctx.fillRect(x+w/2-2,y+8,4,10);}},
+  {id:'winged',name:'Winged Raider',price:50,unlocked:false,draw:(ctx,x,y,w,h)=>{ctx.fillStyle="deepskyblue";ctx.beginPath();ctx.moveTo(x+w/2,y);ctx.lineTo(x+4,y+h);ctx.lineTo(x+(w/2-8),y+h-8);ctx.lineTo(x+(w/2+8),y+h-8);ctx.lineTo(x+w-4,y+h);ctx.fill();ctx.fillStyle="white";ctx.fillRect(x+w/2-3,y+10,6,12);}},
+  {id:'sleek',name:'Sleek Avenger',price:120,unlocked:false,draw:(ctx,x,y,w,h)=>{ctx.fillStyle="lightblue";ctx.beginPath();ctx.moveTo(x+w/2,y);ctx.lineTo(x+4,y+h);ctx.lineTo(x+w/2-6,y+h-6);ctx.lineTo(x+w/2+6,y+h-6);ctx.lineTo(x+w-4,y+h);ctx.fill();ctx.fillStyle="white";ctx.fillRect(x+w/2-4,y+8,8,14);}},
+  {id:'phantom',name:'Phantom Wing',price:250,unlocked:false,draw:(ctx,x,y,w,h)=>{ctx.fillStyle="#98fb98";ctx.beginPath();ctx.moveTo(x+w/2,y);ctx.lineTo(x+w*0.2,y+h);ctx.lineTo(x+w*0.4,y+h*0.8);ctx.lineTo(x+w*0.6,y+h*0.8);ctx.lineTo(x+w*0.8,y+h);ctx.fill();ctx.fillStyle="white";ctx.fillRect(x+w/2-5,y+12,10,12);}}
 ];
 let selectedShip=ships[0];
-
-/* Load unlocked ships */
 ships.forEach(s=>{if(localStorage.getItem('ship_'+s.id)=='1') s.unlocked=true;});
 
 /* Starfield */
@@ -131,6 +129,11 @@ function setupLevelButtons(){
   levelData.forEach((l,i)=>{
     const btn=document.createElement('button');
     btn.innerText=l.name;
+    // Color gradient: easy=green, medium=yellow, hard=red
+    let red=Math.min(255,Math.floor(50 + l.difficulty*70));
+    let green=Math.max(0,255-red);
+    btn.style.background=`rgb(${red},${green},0)`;
+    btn.style.color="#fff";
     btn.onclick=()=>{levelIndex=i; startLevel();}
     div.appendChild(btn);
   });
@@ -176,11 +179,10 @@ function draw(){
   particles.forEach(pt=>{ctx.fillStyle=pt.color; ctx.beginPath(); ctx.arc(pt.x,pt.y,pt.r,0,Math.PI*2); ctx.fill();});
 }
 function loop(){update(); draw(); if(run)requestAnimationFrame(loop);}
-function startLevel(){document.getElementById("mainMenu").style.display="none"; document.getElementById("shopMenu").style.display="none"; paused=false; run=true; spawnWave(); loop();}
+function startLevel(){document.getElementById("mainMenu").style.display="none"; document.getElementById("shopMenu").style.display="none"; paused=false; run=true; spawnPlayer(); spawnWave(); pBullets=[]; eBullets=[]; particles=[]; powerUps=[]; loop();}
 function gameOver(){run=false; if(score>hiScore){hiScore=score; localStorage.setItem('hiScore',hiScore);} document.getElementById("mainMenu").style.display="flex";}
 function endGame(){run=false; document.getElementById("shopMenu").style.display="none"; document.getElementById("pauseOverlay").style.display="none"; document.getElementById("mainMenu").style.display="flex";}
 function resumeGame(){paused=false; document.getElementById("pauseOverlay").style.display="none"; loop();}
-function openPause(){paused=true; document.getElementById("pauseOverlay").style.display="flex();"}
 </script>
 </body>
 </html>
