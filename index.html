@@ -1,65 +1,37 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<title>GALAGA: VOID WAR – Ultimate Edition</title>
+<meta charset="UTF-8">
+<title>Galaga: Void War - Ultimate</title>
 <style>
-  body { margin:0; background:#000; overflow:hidden; font-family:Arial, sans-serif; color:#fff; }
-  canvas { display:block; margin:auto; background:#000; }
-  /* overlay for menus */
-  .overlay {
-    position:absolute; inset:0;
-    display:flex; flex-direction:column; justify-content:center; align-items:center;
-    background:rgba(0,0,0,0.85);
-    color:#fff; text-align:center;
-  }
-  button {
-    padding:12px 28px; margin:8px; font-size:18px; cursor:pointer;
-    border:none; border-radius:6px; font-weight:bold;
-    transition:transform .2s,box-shadow .2s;
-  }
-  button:hover { transform:scale(1.05); box-shadow:0 0 10px #fff; }
-  #easy { background:#28a745; color:#000; }
-  #medium { background:#ffc107; color:#000; }
-  #hard { background:#dc3545; color:#fff; }
-  #hud { position:absolute; top:10px; left:10px; font-size:16px; }
-  #shopList { max-height:60vh; overflow-y:auto; width:80vw; }
-  #shopList div { margin:6px 0; display:flex; justify-content:space-between; align-items:center; }
-  /* small icon-like ship indicator */
-  .miniShip { width:24px; height:24px; margin-right:8px; display:inline-block; }
+body {margin:0; background:#000; overflow:hidden; font-family:Arial,sans-serif; color:#fff;}
+canvas {display:block; margin:auto; background:#000;}
+.overlay{position:absolute; inset:0; display:flex; flex-direction:column; justify-content:center; align-items:center; background:rgba(0,0,0,0.9); color:#fff; text-align:center;}
+button{padding:12px 28px;margin:8px;font-size:18px;cursor:pointer;border:none;border-radius:6px;font-weight:bold;transition:transform .2s,box-shadow .2s;}
+button:hover{transform:scale(1.05);box-shadow:0 0 10px #fff;}
+#hud{position:absolute;top:10px;left:10px;font-size:16px;}
+#shopList{max-height:60vh; overflow-y:auto; width:80vw;}
+#shopList div{margin:6px 0; display:flex; justify-content:space-between; align-items:center;}
+.miniShip{width:24px;height:24px;margin-right:8px; display:inline-block;}
 </style>
 </head>
 <body>
 
-<!-- main menu -->
 <div id="mainMenu" class="overlay">
-  <h1 id="title" style="font-size:54px;">GALAGA: VOID WAR</h1>
+  <h1 style="font-size:54px;">GALAGA: VOID WAR</h1>
   <p>WASD: Move | SPACE: Shoot | P: Pause</p>
-  <div>
-    <button id="easy" onclick="startGame(1)">Easy</button>
-    <button id="medium" onclick="startGame(2)">Medium</button>
-    <button id="hard" onclick="startGame(3)">Hard</button>
-  </div>
+  <div id="levelButtons"></div>
   <p id="hiScore"></p>
   <p id="coinDisplay"></p>
+  <button onclick="openShop()">Open Shop</button>
 </div>
 
-<!-- shop menu -->
 <div id="shopMenu" class="overlay" style="display:none;">
   <h1 style="font-size:48px;">Ship Shop</h1>
   <div id="shopList"></div>
   <button onclick="closeShop()">Back</button>
 </div>
 
-<!-- level transition overlay -->
-<div id="levelOverlay" class="overlay" style="display:none;">
-  <h2 id="levelName" style="font-size:42px;"></h2>
-  <p id="levelInfo"></p>
-  <button onclick="startLevel()">Start</button>
-  <button onclick="openShop()">Shop</button>
-</div>
-
-<!-- pause overlay -->
 <div id="pauseOverlay" class="overlay" style="display:none;">
   <h2 style="font-size:42px;">PAUSED</h2>
   <button onclick="resumeGame()">Resume</button>
@@ -67,511 +39,148 @@
   <button onclick="endGame()">Quit</button>
 </div>
 
-<!-- game HUD -->
 <div id="hud"></div>
 
 <canvas id="game" width="600" height="800"></canvas>
 
 <script>
-/* --------------------------------- */
-/* === GLOBAL / DATA / STORAGE ==== */
-/* --------------------------------- */
-const canvas = document.getElementById("game");
-const ctx = canvas.getContext("2d");
+const canvas=document.getElementById("game"), ctx=canvas.getContext("2d");
+let keys={}, stars=[], stars2=[], player, enemies=[], pBullets=[], eBullets=[], powerUps=[], particles=[];
+let score=0, levelIndex=0, run=false, paused=false, shake=0, lives=3;
+let coins=parseInt(localStorage.getItem('coins')||'0');
+let hiScore=parseInt(localStorage.getItem('hiScore')||'0');
 
-let keys = {};
-let stars = [], stars2 = []; // two layers for parallax
-let player, enemies = [], pBullets = [], eBullets = [], powerUps = [], particles = [];
-let score=0, levelIndex=0, diff=1, run=false, paused=false, shake=0, lives=3;
-let coins = parseInt(localStorage.getItem('coins')||'0');
-let hiScore = parseInt(localStorage.getItem('hiScore')||'0');
-const levelNames = [
-  "1. Outer Rim Skirmish",
-  "2. Deep Space Patrol",
-  "3. Nebula Ambush",
-  "4. Quantum Rift",
-  "5. Boss: Dreadnought",
-  "6. Void Assault",
-  "7. Plasma Frontier",
-  "8. Gravity Storm",
-  "9. Dark Sector",
-  "10. Final Stand"
+const levelData=[
+  {name:"Outer Rim Skirmish", difficulty:1},
+  {name:"Deep Space Patrol", difficulty:1.2},
+  {name:"Nebula Ambush", difficulty:1.5},
+  {name:"Quantum Rift", difficulty:1.8},
+  {name:"Dreadnought Boss", difficulty:2},
+  {name:"Void Assault", difficulty:2.2},
+  {name:"Plasma Frontier", difficulty:2.5},
+  {name:"Gravity Storm", difficulty:2.7},
+  {name:"Dark Sector", difficulty:3},
+  {name:"Final Stand", difficulty:3.2}
 ];
-document.getElementById("hiScore").innerText = `High Score: ${hiScore}`;
-document.getElementById("coinDisplay").innerText = `Coins: ${coins}`;
 
-/* --------------------------------- */
-/* === SHIP MODELS (shop items) ==== */
-/* --------------------------------- */
-const ships = [
-  {
-    id: 'basic',
-    name: 'Basic Fighter',
-    price: 0,
-    unlocked: true,
-    draw: function(x,y,w,h){
-      // similar basic shape
-      ctx.fillStyle="cyan"; ctx.beginPath();
-      ctx.moveTo(x+w/2,y);
-      ctx.lineTo(x,y+h);
-      ctx.lineTo(x+w,y+h);
-      ctx.fill();
-      ctx.fillStyle="white"; ctx.fillRect(x+w/2-2,y+8,4,10);
-    }
-  },
-  {
-    id: 'winged',
-    name: 'Winged Raider',
-    price: 50,
-    unlocked: false,
-    draw: function(x,y,w,h){
-      // better wings
-      ctx.fillStyle="deepskyblue"; ctx.beginPath();
-      ctx.moveTo(x+w/2,y);
-      ctx.lineTo(x+4,y+h);
-      ctx.lineTo(x+(w/2-8),y+h-8);
-      ctx.lineTo(x+(w/2+8),y+h-8);
-      ctx.lineTo(x+w-4,y+h);
-      ctx.fill();
-      ctx.fillStyle="white"; ctx.fillRect(x+w/2-3,y+10,6,12);
-    }
-  },
-  {
-    id: 'sleek',
-    name: 'Sleek Avenger',
-    price: 120,
-    unlocked: false,
-    draw: function(x,y,w,h){
-      ctx.fillStyle="lightblue"; ctx.beginPath();
-      ctx.moveTo(x+w/2,y);
-      ctx.lineTo(x+y/40,y+h); // little design twist
-      ctx.lineTo(x+w/2-6,y+h-6);
-      ctx.lineTo(x+w/2+6,y+h-6);
-      ctx.lineTo(x+w - y/40,y+h);
-      ctx.fill();
-      ctx.fillStyle="white"; ctx.fillRect(x+w/2-4,y+8,8,14);
-    }
-  },
-  {
-    id: 'phantom',
-    name: 'Phantom Wing',
-    price: 250,
-    unlocked: false,
-    draw: function(x,y,w,h){
-      ctx.fillStyle="#98fb98"; // pale green
-      ctx.beginPath();
-      ctx.moveTo(x+w/2,y);
-      ctx.lineTo(x+w*0.2,y+h);
-      ctx.lineTo(x+w*0.4,y+h*0.8);
-      ctx.lineTo(x+w*0.6,y+h*0.8);
-      ctx.lineTo(x+w*0.8,y+h);
-      ctx.fill();
-      ctx.fillStyle="white"; ctx.fillRect(x+w/2-5,y+12,10,12);
-    }
-  }
+document.getElementById("hiScore").innerText="High Score: "+hiScore;
+document.getElementById("coinDisplay").innerText="Coins: "+coins;
+
+/* Ships for shop */
+const ships=[
+  {id:'basic',name:'Basic Fighter',price:0,unlocked:true,draw:(x,y,w,h)=>{ctx.fillStyle="cyan";ctx.beginPath();ctx.moveTo(x+w/2,y);ctx.lineTo(x,y+h);ctx.lineTo(x+w,y+h);ctx.fill();ctx.fillStyle="white";ctx.fillRect(x+w/2-2,y+8,4,10);}},
+  {id:'winged',name:'Winged Raider',price:50,unlocked:false,draw:(x,y,w,h)=>{ctx.fillStyle="deepskyblue";ctx.beginPath();ctx.moveTo(x+w/2,y);ctx.lineTo(x+4,y+h);ctx.lineTo(x+(w/2-8),y+h-8);ctx.lineTo(x+(w/2+8),y+h-8);ctx.lineTo(x+w-4,y+h);ctx.fill();ctx.fillStyle="white";ctx.fillRect(x+w/2-3,y+10,6,12);}},
+  {id:'sleek',name:'Sleek Avenger',price:120,unlocked:false,draw:(x,y,w,h)=>{ctx.fillStyle="lightblue";ctx.beginPath();ctx.moveTo(x+w/2,y);ctx.lineTo(x+4,y+h);ctx.lineTo(x+w/2-6,y+h-6);ctx.lineTo(x+w/2+6,y+h-6);ctx.lineTo(x+w-4,y+h);ctx.fill();ctx.fillStyle="white";ctx.fillRect(x+w/2-4,y+8,8,14);}},
+  {id:'phantom',name:'Phantom Wing',price:250,unlocked:false,draw:(x,y,w,h)=>{ctx.fillStyle="#98fb98";ctx.beginPath();ctx.moveTo(x+w/2,y);ctx.lineTo(x+w*0.2,y+h);ctx.lineTo(x+w*0.4,y+h*0.8);ctx.lineTo(x+w*0.6,y+h*0.8);ctx.lineTo(x+w*0.8,y+h);ctx.fill();ctx.fillStyle="white";ctx.fillRect(x+w/2-5,y+12,10,12);}}
 ];
-let selectedShip = ships[0]; // default
+let selectedShip=ships[0];
 
-/* --------------------------------- */
-/* === HELPER / UTILITY =========== */
-/* --------------------------------- */
-function saveData(){
-  localStorage.setItem('coins', coins);
-  localStorage.setItem('hiScore', hiScore);
-  ships.forEach(s=>localStorage.setItem(`ship_${s.id}`, s.unlocked?1:0));
-}
-function loadShips(){
-  ships.forEach(s=>{
-    if(localStorage.getItem(`ship_${s.id}`)=='1') s.unlocked = true;
-  });
-}
-loadShips();
+/* Load unlocked ships */
+ships.forEach(s=>{if(localStorage.getItem('ship_'+s.id)=='1') s.unlocked=true;});
 
-/* --------------------------------- */
-/* === STARFIELD BACKGROUND ======= */
-/* --------------------------------- */
-for(let i=0;i<150;i++) stars.push({x:Math.random()*600, y:Math.random()*800, s:1+Math.random()*1.5});
-for(let i=0;i<100;i++) stars2.push({x:Math.random()*600, y:Math.random()*800, s:0.5+Math.random()*0.8});
-function drawStars(){
-  // layer 1
-  ctx.fillStyle="#fff";
-  stars.forEach(s=>{
-    ctx.fillRect(s.x,s.y,2,2);
-    s.y += s.s;
-    if(s.y>800){ s.y=0; s.x=Math.random()*600; }
-  });
-  // layer 2 (slower, different brightness)
-  ctx.fillStyle="#888";
-  stars2.forEach(s=>{
-    ctx.fillRect(s.x,s.y,1,1);
-    s.y += s.s;
-    if(s.y>800){ s.y=0; s.x=Math.random()*600; }
-  });
-}
+/* Starfield */
+for(let i=0;i<150;i++) stars.push({x:Math.random()*600,y:Math.random()*800,s:1+Math.random()*1.5});
+for(let i=0;i<100;i++) stars2.push({x:Math.random()*600,y:Math.random()*800,s:0.5+Math.random()*0.8});
+function drawStars(){ctx.fillStyle="#fff";stars.forEach(s=>{ctx.fillRect(s.x,s.y,2,2);s.y+=s.s;if(s.y>800){s.y=0;s.x=Math.random()*600;}});ctx.fillStyle="#888";stars2.forEach(s=>{ctx.fillRect(s.x,s.y,1,1);s.y+=s.s;if(s.y>800){s.y=0;s.x=Math.random()*600;}});}
 
-/* --------------------------------- */
-/* === PLAYER / ENEMY / BULLETS ==== */
-/* --------------------------------- */
-function spawnPlayer(){
-  player = { x:280, y:700, w:40, h:50, spd:6, cd:0, shots:1, shield:0 };
-}
+/* Controls */
+addEventListener("keydown",e=>keys[e.key.toLowerCase()]=1);
+addEventListener("keyup",e=>keys[e.key.toLowerCase()]=0);
+
+/* Player spawn */
+function spawnPlayer(){player={x:280,y:700,w:40,h:50,spd:6,cd:0,shots:1,shield:0};}
+
+/* Enemy spawn */
 function spawnWave(){
-  enemies = []; eBullets = [];
-  const name = levelNames[levelIndex] || `Level ${levelIndex+1}`;
-  // formation 5 cols, rows increasing
-  let cols = 5, rows = 1 + Math.min(levelIndex, 3);
-  for(let r=0; r<rows; r++){
-    for(let c=0; c<cols; c++){
-      let hp = Math.random()<0.2?2:1; // elite 20%
-      enemies.push({
-        x:100 + c*80, y:60 + r*50, w:40, h:30,
-        hp:hp, dx:(r%2?1:-1)*(1+diff*0.5), cd:0,
-        dive:false, targetY:null, angle:0
-      });
+  enemies=[]; eBullets=[];
+  const diff=levelData[levelIndex].difficulty;
+  let cols=5,rows=1+Math.min(levelIndex,3);
+  for(let r=0;r<rows;r++){
+    for(let c=0;c<cols;c++){
+      let hp=Math.random()<0.2?2:1;
+      enemies.push({x:100+c*80,y:60+r*50,w:40,h:30,hp:hp,dx:(r%2?1:-1)*(1+diff*0.5),cd:0,dive:false,angle:0});
     }
   }
-  // boss every 5th
-  if((levelIndex+1)%5===0){
-    enemies.push({
-      x:200, y:40, w:200, h:60, hp:15, boss:true,
-      dx:2*diff, cd:0, dive:false, targetY:null, angle:0
-    });
-  }
+  if((levelIndex+1)%5===0) enemies.push({x:200,y:40,w:200,h:60,hp:15,boss:true,dx:2*diff,cd:0,dive:false,angle:0});
 }
-function startGame(d){
-  diff = d; score = 0; levelIndex = 0; lives = 3;
-  spawnPlayer(); spawnWave(); pBullets=[]; powerUps=[]; particles=[]; eBullets=[];
-  paused = false; run = true; openLevelOverlay();
-}
-function openLevelOverlay(){
-  const ov = document.getElementById("levelOverlay");
-  document.getElementById("overlay").style.display="none";
-  ov.style.display="flex";
-  const name = levelNames[levelIndex] || `Level ${levelIndex+1}`;
-  document.getElementById("levelName").innerText = name;
-  document.getElementById("levelInfo").innerText =
-    `Difficulty: ${diff==1?"Easy":diff==2?"Medium":"Hard"}`;
-}
-function startLevel(){
-  document.getElementById("levelOverlay").style.display="none";
-  document.getElementById("mainMenu").style.display="none";
-  run = true;
-  loop();
-}
-function openShop(){
-  paused = true;
-  document.getElementById("shopMenu").style.display="flex";
-  populateShop();
-}
-function closeShop(){
-  paused = false;
-  document.getElementById("shopMenu").style.display="none";
-}
-function endGame(){
-  run = false;
-  document.getElementById("shopMenu").style.display="none";
-  document.getElementById("pauseOverlay").style.display="none";
-  document.getElementById("mainMenu").style.display="flex";
-  updateHUD();
-  saveData();
-}
-function resumeGame(){
-  paused = false;
-  document.getElementById("pauseOverlay").style.display="none";
-  loop();
-}
-function openPause(){
-  paused = true;
-  document.getElementById("pauseOverlay").style.display="flex";
-}
-function levelComplete(){ /* placeholder if needed */ }
 
-/* shop UI */
+/* Shop */
+function openShop(){paused=true; document.getElementById("shopMenu").style.display="flex"; populateShop();}
+function closeShop(){paused=false; document.getElementById("shopMenu").style.display="none";}
 function populateShop(){
-  const list = document.getElementById("shopList");
-  list.innerHTML = '';
+  const list=document.getElementById("shopList"); list.innerHTML='';
   ships.forEach(s=>{
-    const item = document.createElement('div');
-    // mini preview canvas indicator
-    const mini = document.createElement('span');
-    mini.className = 'miniShip';
-    // draw ship into mini via offscreen canvas
-    const miniCanvas = document.createElement('canvas');
-    miniCanvas.width = 24; miniCanvas.height = 24;
-    const miniCtx = miniCanvas.getContext('2d');
-    s.draw(miniCtx,0,0,24,24); // reuse draw but adapted
-    mini.appendChild(miniCanvas);
-    // name
-    const name = document.createElement('span');
-    name.innerText = s.name;
-    // price / status
-    const status = document.createElement('span');
-    if(s.unlocked){ status.innerText = "Owned"; }
-    else { status.innerText = `${s.price} coins`; }
-    // button
-    const btn = document.createElement('button');
-    if(s.unlocked) btn.innerText = "Equip";
-    else btn.innerText = "Buy";
-    btn.onclick = () =>{
-      if(s.unlocked){ selectedShip = s; }
-      else if(coins>=s.price){
-        coins -= s.price; s.unlocked=true; selectedShip=s;
-        document.getElementById("coinDisplay").innerText = `Coins: ${coins}`;
-      }
-      populateShop();
-      saveData();
+    const div=document.createElement('div');
+    const name=document.createElement('span'); name.innerText=s.name;
+    const status=document.createElement('span'); status.innerText=s.unlocked?"Owned":s.price+" coins";
+    const btn=document.createElement('button');
+    btn.innerText=s.unlocked?"Equip":"Buy";
+    btn.onclick=()=>{
+      if(s.unlocked){selectedShip=s;}
+      else if(coins>=s.price){coins-=s.price; s.unlocked=true; selectedShip=s; document.getElementById("coinDisplay").innerText="Coins: "+coins;}
+      populateShop(); localStorage.setItem('coins',coins); ships.forEach(s=>localStorage.setItem('ship_'+s.id,s.unlocked?1:0));
     };
-    item.appendChild(mini);
-    item.appendChild(name);
-    item.appendChild(status);
-    item.appendChild(btn);
-    list.appendChild(item);
+    div.appendChild(name); div.appendChild(status); div.appendChild(btn); list.appendChild(div);
   });
 }
 
-/* ------------------------------- */
-/* ===== HELPER FUNCTIONS ======= */
-/* ------------------------------- */
-function emitParticle(x,y,color){
-  particles.push({x,y,vx:(Math.random()*2-1)*2, vy:(Math.random()*2-1)*2, r:Math.random()*2+1, life:20, color});
+/* Levels menu */
+function setupLevelButtons(){
+  const div=document.getElementById("levelButtons");
+  div.innerHTML='';
+  levelData.forEach((l,i)=>{
+    const btn=document.createElement('button');
+    btn.innerText=l.name;
+    btn.onclick=()=>{levelIndex=i; startLevel();}
+    div.appendChild(btn);
+  });
 }
-function saveHighScore(){
-  if(score>hiScore){ hiScore=score; localStorage.setItem('hiScore',hiScore); }
-}
-function updateCoins(amount){
-  coins += amount;
-  document.getElementById("coinDisplay").innerText = `Coins: ${coins}`;
-  saveData();
-}
-function updateHUD(){
-  const hud=document.getElementById("hud");
-  hud.innerText = `Score:${score} Level:${levelIndex+1} Lives:${lives} Shield:${player.shield} Coins:${coins} Hi:${hiScore}`;
-}
+setupLevelButtons();
 
-/* --------------------------------- */
-/* === STARFIELD DETAIL / DRAW ==== */
-/* --------------------------------- */
-function drawStarfield(){
-  drawStars();
-}
+/* HUD */
+function updateHUD(){document.getElementById("hud").innerText=`Score:${score} Level:${levelIndex+1} Lives:${lives} Shield:${player.shield} Coins:${coins} Hi:${hiScore}`;}
 
-/* --------------------------------- */
-/* ===== GAME LOOP / UPDATE ======= */
-/* --------------------------------- */
-addEventListener("keydown",e=>keys[e.key.toLowerCase()] = 1);
-addEventListener("keyup",e=>keys[e.key.toLowerCase()] = 0);
-
+/* Game loop */
 function update(){
-  if(!run) return;
-
-  // pulsing title when main menu visible
-  const overlay = document.getElementById("mainMenu");
-  if(overlay.style.display!="none"){
-    let p = parseFloat(titleElem.style.transform.replace('scale(','').replace(')',''))||1;
-    p += 0.005 * (p>1.05?-1:1);
-    titleElem.style.transform=`scale(${p})`;
-  }
-
-  if(paused) return;
-  if(keys.p){ openPause(); keys.p=0; return; }
-
-  /* ===== PLAYER MOVEMENT ===== */
-  if(keys.a && player.x>0) player.x -= player.spd;
-  if(keys.d && player.x+player.w<600) player.x += player.spd;
-  if(keys.w && player.y>400) player.y -= player.spd;
-  if(keys.s && player.y+player.h<780) player.y += player.spd;
-
-  /* ===== SHOOT ===== */
-  if(keys[" "] && player.cd<=0){
-    for(let i=0;i<player.shots;i++){
-      pBullets.push({x:player.x+player.w/2-2 + i*8, y:player.y, dy:-12});
-    }
-    player.cd = 18; beep(700,.05);
-    keys[" "] = 0; // require re-press for next shot if desired
-  }
+  if(!run || paused) return;
+  /* Player */
+  if(keys.a && player.x>0) player.x-=player.spd;
+  if(keys.d && player.x+player.w<600) player.x+=player.spd;
+  if(keys.w && player.y>400) player.y-=player.spd;
+  if(keys.s && player.y+player.h<780) player.y+=player.spd;
+  if(keys[" "] && player.cd<=0){for(let i=0;i<player.shots;i++) pBullets.push({x:player.x+player.w/2-2+i*8,y:player.y,dy:-12}); player.cd=18; keys[" "]=0;}
   if(player.cd>0) player.cd--;
-
-  /* ===== BULLETS ===== */
-  pBullets.forEach(b=>b.y += b.dy);
-  eBullets.forEach(b=>b.y += b.dy);
-
-  /* ===== ENEMIES ===== */
+  pBullets.forEach(b=>b.y+=b.dy);
+  eBullets.forEach(b=>b.y+=b.dy);
+  /* Enemies */
+  const diff=levelData[levelIndex].difficulty;
   enemies.forEach(e=>{
-    if(!e.dive){
-      e.x += e.dx;
-      if(e.x<0 || e.x+e.w>600) e.dx *= -1;
-      // chance to dive
-      if(Math.random() < 0.01*diff){ e.dive=true; e.angle=Math.random()*Math.PI/2-0.25; }
-    } else {
-      // curved dive
-      e.x += Math.sin(e.angle)*3;
-      e.y += Math.cos(e.angle)*3;
-      e.angle += 0.02;
-      // remove if off-screen bottom
-      if(e.y>800) e.dive=false;
-    }
-    // enemy shoot
-    if(Math.random()<0.005*diff && e.cd<=0){
-      eBullets.push({x:e.x+e.w/2, y:e.y+e.h, dy:6});
-      e.cd = 60;
-    }
+    if(!e.dive){e.x+=e.dx; if(e.x<0||e.x+e.w>600)e.dx*=-1; if(Math.random()<0.01*diff)e.dive=true; }
+    else{e.x+=Math.sin(e.angle)*3; e.y+=Math.cos(e.angle)*3; e.angle+=0.02; if(e.y>800)e.dive=false;}
+    if(Math.random()<0.005*diff && e.cd<=0){eBullets.push({x:e.x+e.w/2,y:e.y+e.h,dy:6}); e.cd=60;}
     if(e.cd>0) e.cd--;
   });
-
-  /* ===== COLLISION: PLAYER BULLETS -> ENEMIES ===== */
-  pBullets = pBullets.filter(b=>{
-    let alive = true;
-    enemies.forEach((e,ei)=>{
-      if(b.x>e.x && b.x<e.x+e.w && b.y>e.y && b.y<e.y+e.h){
-        e.hp--; alive=false; shake=6;
-        if(e.hp<=0){
-          // enemy destroyed
-          enemies.splice(ei,1);
-          score += e.boss?200:10;
-          updateCoins(5); // earn coins per kill
-          // explosion particles
-          for(let i=0;i<8;i++) emitParticle(e.x+e.w/2, e.y+e.h/2, e.boss?"orange":"yellow");
-          beep(200,.1);
-          // powerup drop chance
-          if(Math.random()<0.25) powerUps.push({x:e.x,y:e.y,t:Math.random()<0.5?"triple":"shield"});
-        }
-      }
-    });
-    // remove bullet off-screen
-    if(b.y<0) alive=false;
-    return alive;
-  });
-
-  /* ===== COLLISION: ENEMY BULLETS -> PLAYER ===== */
-  eBullets = eBullets.filter(b=>{
-    let alive = true;
-    if(b.x>player.x && b.x<player.x+player.w && b.y>player.y && b.y<player.y+player.h){
-      if(diff<3 && player.shield>0) player.shield--;
-      else {
-        lives--;
-        if(lives>0) spawnPlayer(); else gameOver();
-      }
-      alive=false;
-      // impact effect
-      for(let i=0;i<5;i++) emitParticle(b.x, b.y, "red");
-    }
-    if(b.y>800) alive=false;
-    return alive;
-  });
-
-  /* ===== POWERUPS ===== */
+  /* Collisions */
+  pBullets=pBullets.filter(b=>{let alive=true; enemies.forEach((e,i)=>{if(b.x>e.x && b.x<e.x+e.w && b.y>e.y && b.y<e.y+e.h){e.hp--; alive=false; shake=6; if(e.hp<=0){enemies.splice(i,1); score+=e.boss?200:10; coins+=5; for(let j=0;j<8;j++)particles.push({x:e.x+e.w/2,y:e.y+e.h/2,vx:(Math.random()*2-1)*2,vy:(Math.random()*2-1)*2,r:Math.random()*2+1,life:20,color:e.boss?"orange":"yellow"}); if(Math.random()<0.25)powerUps.push({x:e.x,y:e.y,t:Math.random()<0.5?"triple":"shield"});}}}); if(b.y<0) alive=false; return alive;});
+  eBullets=eBullets.filter(b=>{let alive=true; if(b.x>player.x && b.x<player.x+player.w && b.y>player.y && b.y<player.y+player.h){lives--; if(lives>0)spawnPlayer(); else gameOver(); alive=false;} if(b.y>800) alive=false; return alive;});
   powerUps.forEach(p=>p.y+=2);
-  powerUps = powerUps.filter(p=>{
-    if(p.x>player.x && p.x<player.x+player.w && p.y>player.y && p.y<player.y+player.h){
-      if(p.t=="triple") player.shots=3;
-      if(p.t=="shield") player.shield=5;
-      return false;
-    }
-    return p.y<=800;
-  });
-
-  /* ===== PARTICLES ===== */
-  particles.forEach((pt,i)=>{
-    pt.x+=pt.vx; pt.y+=pt.vy; pt.life--;
-    if(pt.life<=0) particles.splice(i,1);
-  });
-
-  /* ===== LEVEL / WAVE END ===== */
-  // skip wave if all enemies gone OR all below bottom
-  if(enemies.length===0 || enemies.every(e=>e.y>800)){
-    levelIndex++;
-    // increase difficulty visually
-    if(levelIndex<levelNames.length){
-      diff = Math.min(3, diff + 0.2); // gradually harder
-    }
-    spawnPlayer(); spawnWave(); // reset for next wave
-    paused = true; document.getElementById("levelOverlay").style.display="flex";
-  }
-
-  /* ===== HUD ===== */
+  powerUps=powerUps.filter(p=>!(p.x>player.x && p.x<player.x+player.w && p.y>player.y && p.y<player.y+player.h)?true:false);
+  if(enemies.length===0||enemies.every(e=>e.y>800)){levelIndex++; if(levelIndex>=levelData.length)levelIndex=0; spawnPlayer(); spawnWave();}
   updateHUD();
 }
-
-/* --------------------------------- */
-/* ===== DRAWING ===== */
-/* --------------------------------- */
 function draw(){
-  ctx.save();
-  // apply shake
-  if(shake){ ctx.translate(Math.random()*shake - shake/2, Math.random()*shake - shake/2); }
-  ctx.clearRect(0,0,600,800);
-
-  drawStarfield();
-
-  // draw player using selectedShip design
-  selectedShip.draw(ctx, player.x, player.y, player.w, player.h);
-
-  // draw bullets
-  ctx.fillStyle="yellow";
-  pBullets.forEach(b=>ctx.fillRect(b.x,b.y,4,10));
-  ctx.fillStyle="red";
-  eBullets.forEach(b=>ctx.fillRect(b.x,b.y,4,10));
-
-  // draw enemies with shapes
-  enemies.forEach(e=>{
-    if(e.boss){
-      ctx.fillStyle="darkred"; ctx.fillRect(e.x,e.y,e.w,e.h);
-      ctx.fillStyle="white"; ctx.fillRect(e.x+e.w/2-7,e.y+10,14,10); // simple eyes
-    } else if(e.hp==2){
-      // elite: bright orange with small cockpit
-      ctx.fillStyle="orange"; ctx.fillRect(e.x,e.y,e.w,e.h);
-      ctx.fillStyle="white"; ctx.fillRect(e.x+e.w/2-4,e.y+6,8,6);
-    } else {
-      // normal enemy: purple with small wing look
-      ctx.fillStyle="purple"; ctx.beginPath();
-      ctx.moveTo(e.x + e.w/2, e.y);
-      ctx.lineTo(e.x, e.y + e.h);
-      ctx.lineTo(e.x + e.w, e.y + e.h);
-      ctx.closePath();
-      ctx.fill();
-    }
-  });
-
-  // draw powerups
-  powerUps.forEach(p=>{
-    ctx.fillStyle=p.t=="triple"?"lime":"cyan";
-    ctx.fillRect(p.x,p.y,20,20);
-  });
-
-  // draw particles
-  particles.forEach(pt=>{
-    ctx.fillStyle=pt.color;
-    ctx.beginPath(); ctx.arc(pt.x,pt.y,pt.r,0,Math.PI*2); ctx.fill();
-  });
-
-  ctx.restore();
-  if(shake>0) shake--;
+  ctx.clearRect(0,0,600,800); drawStars(); selectedShip.draw(ctx,player.x,player.y,player.w,player.h);
+  ctx.fillStyle="yellow"; pBullets.forEach(b=>ctx.fillRect(b.x,b.y,4,10));
+  ctx.fillStyle="red"; eBullets.forEach(b=>ctx.fillRect(b.x,b.y,4,10));
+  enemies.forEach(e=>{if(e.boss){ctx.fillStyle="darkred"; ctx.fillRect(e.x,e.y,e.w,e.h); ctx.fillStyle="white"; ctx.fillRect(e.x+e.w/2-7,e.y+10,14,10);} else if(e.hp==2){ctx.fillStyle="orange"; ctx.fillRect(e.x,e.y,e.w,e.h); ctx.fillStyle="white"; ctx.fillRect(e.x+e.w/2-4,e.y+6,8,6);} else{ctx.fillStyle="purple"; ctx.beginPath(); ctx.moveTo(e.x+e.w/2,e.y); ctx.lineTo(e.x,e.y+e.h); ctx.lineTo(e.x+e.w,e.y+e.h); ctx.closePath(); ctx.fill();}});
+  particles.forEach(pt=>{ctx.fillStyle=pt.color; ctx.beginPath(); ctx.arc(pt.x,pt.y,pt.r,0,Math.PI*2); ctx.fill();});
 }
-
-/* --------------------------------- */
-/* ===== MAIN LOOP ===== */
-/* --------------------------------- */
-function loop(){
-  update(); draw();
-  if(run) requestAnimationFrame(loop);
-}
-
-/* --------------------------------- */
-/* ===== GAME OVER ===== */
-/* --------------------------------- */
-function gameOver(){
-  run=false; saveHighScore(); openLevelOverlay(); // show overlay to restart or go to shop
-}
-
-/* --------------------------------- */
-/* ==== INITIALIZE ===== */
-/* --------------------------------- */
-spawnPlayer();
-spawnWave();
-updateHUD();
-
-/* For convenience: open main menu in start */
-document.getElementById("mainMenu").style.display="flex";
+function loop(){update(); draw(); if(run)requestAnimationFrame(loop);}
+function startLevel(){document.getElementById("mainMenu").style.display="none"; document.getElementById("shopMenu").style.display="none"; paused=false; run=true; spawnWave(); loop();}
+function gameOver(){run=false; if(score>hiScore){hiScore=score; localStorage.setItem('hiScore',hiScore);} document.getElementById("mainMenu").style.display="flex";}
+function endGame(){run=false; document.getElementById("shopMenu").style.display="none"; document.getElementById("pauseOverlay").style.display="none"; document.getElementById("mainMenu").style.display="flex";}
+function resumeGame(){paused=false; document.getElementById("pauseOverlay").style.display="none"; loop();}
+function openPause(){paused=true; document.getElementById("pauseOverlay").style.display="flex();"}
 </script>
 </body>
 </html>
