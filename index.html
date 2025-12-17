@@ -2,34 +2,23 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Doom 1998 Browser Demo</title>
+<title>Doom 1998 Clone</title>
 <style>
-body{margin:0; overflow:hidden; background:black; color:white; font-family:sans-serif;}
-canvas{display:block;}
-#info{position:absolute;top:10px;left:10px;color:white;font-size:18px;}
+body { margin:0; overflow:hidden; background:black; font-family:sans-serif;}
+canvas { display:block; }
+#hud { position:absolute; top:10px; left:10px; color:white; font-size:18px; }
 </style>
 </head>
 <body>
-<div id="info">Use WASD to move, mouse to look, left click to shoot</div>
-<canvas id="gameCanvas" width="800" height="600"></canvas>
-
+<canvas id="game" width="800" height="600"></canvas>
+<div id="hud"></div>
 <script>
-const canvas = document.getElementById("gameCanvas");
+const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
-let width = canvas.width, height = canvas.height;
+const hud = document.getElementById("hud");
+const width = canvas.width;
+const height = canvas.height;
 
-let player = {x:100, y:100, angle:0, speed:0, bullets:[]};
-let keys = {};
-
-document.addEventListener("keydown", e => keys[e.key] = true);
-document.addEventListener("keyup", e => keys[e.key] = false);
-canvas.addEventListener("click", shoot);
-
-function shoot(){
-  player.bullets.push({x:player.x, y:player.y, angle:player.angle});
-}
-
-// Simple map: 0 = empty, 1 = wall
 const map = [
   [1,1,1,1,1,1,1,1,1,1],
   [1,0,0,0,0,0,0,0,0,1],
@@ -41,26 +30,36 @@ const map = [
   [1,1,1,1,1,1,1,1,1,1]
 ];
 
-const enemies = [
-  {x:400, y:200, size:20, hp:3},
-  {x:600, y:400, size:20, hp:3}
-];
+let player = {x:160, y:160, angle:0, speed:0, health:100, ammo:50};
+let keys = {};
+let bullets = [];
+let enemies = [{x:400,y:200,hp:3},{x:500,y:400,hp:3}];
+
+document.addEventListener("keydown",e=>keys[e.key]=true);
+document.addEventListener("keyup",e=>keys[e.key]=false);
+canvas.addEventListener("click",()=>shoot());
+
+function shoot(){
+  if(player.ammo>0){
+    bullets.push({x:player.x,y:player.y,angle:player.angle});
+    player.ammo--;
+  }
+}
 
 function update(){
-  // player movement
-  if(keys["w"]) player.y -= 2;
-  if(keys["s"]) player.y += 2;
-  if(keys["a"]) player.x -= 2;
-  if(keys["d"]) player.x += 2;
+  // movement
+  if(keys["w"]){player.x+=Math.cos(player.angle)*3; player.y+=Math.sin(player.angle)*3;}
+  if(keys["s"]){player.x-=Math.cos(player.angle)*3; player.y-=Math.sin(player.angle)*3;}
+  if(keys["a"]){player.angle-=0.05;}
+  if(keys["d"]){player.angle+=0.05;}
   
   // bullets
-  player.bullets.forEach((b,i)=>{
-    b.x += Math.cos(b.angle)*10;
-    b.y += Math.sin(b.angle)*10;
+  bullets.forEach((b,i)=>{
+    b.x+=Math.cos(b.angle)*10;
+    b.y+=Math.sin(b.angle)*10;
     enemies.forEach((e,ei)=>{
-      if(Math.abs(b.x-e.x)<e.size && Math.abs(b.y-e.y)<e.size){
-        e.hp--;
-        player.bullets.splice(i,1);
+      if(Math.abs(b.x-e.x)<20 && Math.abs(b.y-e.y)<20){
+        e.hp--; bullets.splice(i,1);
         if(e.hp<=0) enemies.splice(ei,1);
       }
     });
@@ -68,36 +67,43 @@ function update(){
 }
 
 function draw(){
-  ctx.fillStyle="black";
-  ctx.fillRect(0,0,width,height);
-
-  // Draw walls
-  for(let r=0;r<map.length;r++){
-    for(let c=0;c<map[r].length;c++){
-      if(map[r][c]===1){
-        ctx.fillStyle="#400000"; // blood red wall
-        ctx.fillRect(c*80,r*75,80,75);
-      }
+  ctx.clearRect(0,0,width,height);
+  
+  // simple raycasting walls
+  for(let i=0;i<width;i+=2){
+    let rayAngle = player.angle + (i-width/2)/width*1.0;
+    let distanceToWall = 0;
+    let hitWall=false;
+    let eyeX = Math.cos(rayAngle);
+    let eyeY = Math.sin(rayAngle);
+    
+    while(!hitWall && distanceToWall<500){
+      distanceToWall+=5;
+      let testX=Math.floor((player.x+eyeX*distanceToWall)/64);
+      let testY=Math.floor((player.y+eyeY*distanceToWall)/64);
+      if(testX<0||testX>=map[0].length||testY<0||testY>=map.length){hitWall=true;distanceToWall=500;}
+      else if(map[testY][testX]>0) hitWall=true;
     }
+    let lineHeight = 600/distanceToWall*50;
+    ctx.strokeStyle=`rgb(${255-distanceToWall/2},0,0)`;
+    ctx.beginPath();
+    ctx.moveTo(i,height/2-lineHeight/2);
+    ctx.lineTo(i,height/2+lineHeight/2);
+    ctx.stroke();
   }
-
-  // Draw player gun
-  ctx.fillStyle="gray";
-  ctx.fillRect(width/2-20,height-100,40,100);
-
+  
   // Draw enemies
   enemies.forEach(e=>{
     ctx.fillStyle="green";
     ctx.fillRect(e.x-10,e.y-10,20,20);
   });
-
+  
   // Draw bullets
   ctx.fillStyle="yellow";
-  player.bullets.forEach(b=>{
-    ctx.beginPath();
-    ctx.arc(b.x,b.y,4,0,Math.PI*2);
-    ctx.fill();
-  });
+  bullets.forEach(b=>{ctx.beginPath();ctx.arc(b.x,b.y,4,0,Math.PI*2);ctx.fill();});
+  
+  // HUD
+  hud.innerHTML=`Health: ${player.health} | Ammo: ${player.ammo} | Enemies: ${enemies.length}`;
 }
 
 function gameLoop(){
@@ -110,7 +116,7 @@ canvas.addEventListener("mousemove", e=>{
   let rect = canvas.getBoundingClientRect();
   let dx = e.clientX - rect.left - width/2;
   let dy = e.clientY - rect.top - height/2;
-  player.angle = Math.atan2(dy, dx);
+  player.angle = Math.atan2(dy,dx);
 });
 
 gameLoop();
